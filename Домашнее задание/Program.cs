@@ -7,17 +7,17 @@ namespace ConsoleApp1
     {
         static void Main(string[] args)
         {
-            Good iPhone12 = new Good("IPhone 12");
-            Good iPhone11 = new Good("IPhone 11");
+            Item iPhone12 = new Item("IPhone 12");
+            Item iPhone11 = new Item("IPhone 11");
 
-            Warehouse warehouse = new Warehouse();
+            Werehouse werehouse = new Werehouse();
 
-            Shop shop = new Shop(warehouse);
+            Shop shop = new Shop(werehouse);
 
-            warehouse.Delive(iPhone12, 10);
-            warehouse.Delive(iPhone11, 1);
+            werehouse.Delive(iPhone12, 10);
+            werehouse.Delive(iPhone11, 1);
 
-            warehouse.ShowGoods();
+            werehouse.ShowItems();
 
             Cart cart = shop.CreateCart();
             cart.Add(iPhone12, 4);
@@ -25,7 +25,7 @@ namespace ConsoleApp1
 
             cart.ShowGoods();
 
-            Console.WriteLine(cart.Order().Paylink);
+            Console.WriteLine(cart.GetOrder().Paylink);
 
             cart.Add(iPhone12, 9);
 
@@ -40,42 +40,39 @@ namespace ConsoleApp1
             Paylink = paylink;
         }
 
-        public string Paylink { get; private set; }
+        public string Paylink { get; }
     }
 
     public class Cart
     {
-        private readonly IWarehouse _warehouse;
-        private readonly Dictionary<Good, int> _goods = new Dictionary<Good, int>();
+        private readonly IRemovableWerehouse _removableWerehouse;
+        private readonly List<Cell> _cellsOfItem = new List<Cell>();
 
-        public Cart(IWarehouse warehouse)
+        public Cart(IRemovableWerehouse removableWerehouse)
         {
-            _warehouse = warehouse;
+            _removableWerehouse = removableWerehouse;
         }
 
-        public void Add(Good good, int count)
+        public void Add(Item item, int count)
         {
-            if (_warehouse.Contains(good, count))
-            {
-                _goods.Add(good, count);
-                _warehouse.WriteOffGood(good, count);
-            }
+            if (_removableWerehouse.TryRemove(item, count))
+                _cellsOfItem.Add(new Cell(item, count));
         }
 
         public void ShowGoods()
         {
-            foreach (KeyValuePair<Good, int> good in _goods)
+            foreach (Cell cell in _cellsOfItem)
             {
-                Console.WriteLine($"{good.Key.Name}: {good.Value}");
+                Console.WriteLine($"{cell.Item.Name}: {cell.Count}");
             }
         }
 
-        public Order Order()
+        public Order GetOrder()
         {
             int paylink = 0;
 
-            foreach (KeyValuePair<Good, int> good in _goods)
-                paylink += good.Value;
+            foreach (Cell cell in _cellsOfItem)
+                paylink += cell.Count;
 
             return new Order($"Paylink: {paylink}");
         }
@@ -83,75 +80,140 @@ namespace ConsoleApp1
 
     public class Shop
     {
-        private readonly Warehouse _warehouse;
+        private readonly Werehouse _werehouse;
 
-        public Shop(Warehouse warehouse)
+        public Shop(Werehouse werehouse)
         {
-            _warehouse = warehouse;
+            _werehouse = werehouse;
         }
 
         public Cart CreateCart()
         {
-            return new Cart(_warehouse);
+            return new Cart(_werehouse);
         }
     }
 
-    public class Warehouse : IWarehouse
+    public class Werehouse : IRemovableWerehouse
     {
-        private Dictionary<Good, int> _goods = new Dictionary<Good, int>();
+        private List<Cell> _cells = new List<Cell>();
 
-        public void Delive(Good good, int count)
+        public bool HasCells => _cells.Count > 0;
+
+        public void Delive(Item item, int count)
         {
-            if (good == null)
-                throw new ArgumentNullException(nameof(good));
+            if (CheckValidate(item, count) == false)
+                return;
+
+            if (HasCells == false)
+            {
+                _cells.Add(new Cell(item, count));
+
+                return;
+            }
+
+            foreach (var cell in _cells)
+            {
+                if (cell.TrySetItem(item, count))
+                    return;
+            }
+
+            _cells.Add(new Cell(item, count));
+        }
+
+        public bool TryRemove(Item item, int count)
+        {
+            if (CheckValidate(item, count) == false)
+                return false;
+
+            if (HasCells == false)
+                return false;
+
+            foreach (var cell in _cells)
+            {
+                if (cell.IsEmpty == false && cell.Item == item)
+                {
+                    cell.RemoveItem(count);
+
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public void ShowItems()
+        {
+            foreach (Cell cell in _cells)
+                Console.WriteLine($"{cell.Item.Name}: {cell.Count}");
+        }
+
+        private bool CheckValidate(Item item, int count)
+        {
+            if (item == null)
+                throw new ArgumentNullException(nameof(item));
 
             if (count <= 0)
                 throw new ArgumentOutOfRangeException(nameof(count));
 
-            _goods.Add(good, count);
+            return true;
+        }
+    }
+
+    public interface IRemovableWerehouse
+    {
+        bool TryRemove(Item item, int count);
+    }
+
+    public class Cell
+    {
+        public Cell(Item item, int count)
+        {
+            Item = item;
+            Count = count;
         }
 
-        public bool Contains(Good good, int count)
-        {
-            if (_goods.ContainsKey(good) == false)
-                throw new ArgumentNullException(nameof(good));
+        public Item Item { get; private set; }
 
-            if (_goods.Count < count)
+        public int Count { get; private set; }
+
+        public bool IsEmpty => Item == null;
+
+        public bool TrySetItem(Item item, int count)
+        {
+            if (item == null)
+                throw new ArgumentNullException(nameof(item));
+
+            if (count <= 0)
                 throw new ArgumentOutOfRangeException(nameof(count));
+
+            if (IsEmpty == false && item != Item)
+                return false;
+
+            if (IsEmpty)
+                Item = item;
+
+            Count = count;
 
             return true;
         }
 
-        public void WriteOffGood(Good good, int count)
+        public void RemoveItem(int count)
         {
-            int goodCountInKey = _goods[good];
+            if (count <= 0)
+                throw new ArgumentOutOfRangeException(nameof(count));
 
-            if (goodCountInKey >= count)
-                _goods[good] -= count;
-            else
-                _goods.Remove(good);
-        }
+            Count -= count;
 
-        public void ShowGoods()
-        {
-            foreach (KeyValuePair<Good, int> good in _goods)
-            {
-                Console.WriteLine($"{good.Key.Name}: {good.Value}");
-            }
+            if (Count <= 0)
+                Item = null;
         }
     }
 
-    public interface IWarehouse
+    public class Item
     {
-        bool Contains(Good good, int count);
-        void WriteOffGood(Good good, int count);
-    }
+        public string Name { get; }
 
-    public class Good
-    {
-        public string Name { get; private set; }
-
-        public Good(string name)
+        public Item(string name)
         {
             Name = name;
         }

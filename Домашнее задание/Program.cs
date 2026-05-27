@@ -39,17 +39,17 @@ namespace ConsoleApp1
 
     public class Cart
     {
-        private readonly IRemovableItemsWarehouse _removableItemsWarehouse;
+        private readonly IItemsWarehouse _itemsWarehouse;
         private readonly List<Cell> _cellsOfItem = new List<Cell>();
 
-        public Cart(IRemovableItemsWarehouse removableItemsWarehouse)
+        public Cart(IItemsWarehouse itemsWarehouse)
         {
-            _removableItemsWarehouse = removableItemsWarehouse;
+            _itemsWarehouse = itemsWarehouse;
         }
 
         public void Add(Item item, int count)
         {
-            if (_removableItemsWarehouse.Contains(item, count, out Cell _))
+            if (_itemsWarehouse.Contains(item, count, out Cell _))
                 _cellsOfItem.Add(new Cell(item, count));
         }
 
@@ -92,7 +92,7 @@ namespace ConsoleApp1
         }
     }
 
-    public class ItemsWarehouse : IRemovableItemsWarehouse
+    public class ItemsWarehouse : IItemsWarehouse
     {
         private List<Cell> _cells = new List<Cell>();
 
@@ -104,7 +104,7 @@ namespace ConsoleApp1
             {
                 if (cell.Item == item)
                 {
-                    cell.SetItemCount(count);
+                    cell.AddItemCount(count);
 
                     return;
                 }
@@ -150,7 +150,7 @@ namespace ConsoleApp1
         }
     }
 
-    public interface IRemovableItemsWarehouse
+    public interface IItemsWarehouse
     {
         bool Contains(Item item, int count, out Cell foundCell);
     }
@@ -169,11 +169,11 @@ namespace ConsoleApp1
 
         public bool IsEmpty => Count <= 0;
 
-        public void SetItemCount(int count)
+        public void AddItemCount(int count)
         {
             ThrowHelper.ValidateEnteringItemData(count);
 
-            Count = count;
+            Count += count;
         }
 
         public void RemoveItemCount(int count)
